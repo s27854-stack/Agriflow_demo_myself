@@ -450,6 +450,22 @@ document.getElementById('cfg-duration').addEventListener('input', e => {
   saveTimer = setTimeout(() => saveConfig({ wateringMinutes: parseInt(e.target.value) }), 500);
 });
 
+// ── Reset WiFi Button ────────────────────────
+document.getElementById('reset-wifi-btn').addEventListener('click', () => {
+  if (!confirm('Reset WiFi? ESP32 will reboot and open setup portal.')) return;
+  
+  fetch('/api/reset-wifi', { method: 'POST' })
+    .then(r => r.json())
+    .then(res => {
+      if (res.ok) {
+        showToast('WiFi Reset', 'ESP32 will reboot into setup mode', toastIcons.warning, 'warning');
+      }
+    })
+    .catch(() => {
+      showToast('Error', 'Failed to reset WiFi', toastIcons.error, 'error');
+    });
+});
+
 // Handle SSE config updates from other clients
 function handleConfigUpdate(cfg) {
   document.getElementById('cfg-threshold').value = cfg.openThreshold;

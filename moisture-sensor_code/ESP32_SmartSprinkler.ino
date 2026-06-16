@@ -89,6 +89,16 @@ void parseConfig(String response) {
       Serial.println(wateringMinutes);
     }
   }
+
+  // Check for WiFi reset request from dashboard
+  idx = response.indexOf("\"resetWifi\":true");
+  if (idx >= 0) {
+    Serial.println("[RESET] WiFi reset requested from dashboard!");
+    Serial.println("[RESET] Clearing config and rebooting...");
+    clearConfig();
+    delay(500);
+    ESP.restart();
+  }
 }
 
 // ==================== Setup ====================

@@ -82,7 +82,11 @@ async function connectDB() {
 connectDB();
 
 // ── Config (from TiDB) ────────────────────────
-let config = { openThreshold: 40, wateringMinutes: 3 };
+let config = {
+  openThreshold:   40,
+  wateringMinutes: 3,
+  resetWifi:       false
+};
 
 async function loadConfig() {
   if (!db) return;
@@ -154,6 +158,15 @@ app.post('/api/config', async (req, res) => {
   await saveConfig();
   broadcast({ type: 'config', data: config });
   res.json({ ok: true, config });
+});
+
+// ── POST /api/reset-wifi ──────────────────────
+app.post('/api/reset-wifi', async (req, res) => {
+  console.log('[RESET] WiFi reset requested from dashboard');
+  config.resetWifi = true;
+  await saveConfig();
+  broadcast({ type: 'config', data: config });
+  res.json({ ok: true, message: 'ESP32 will reset WiFi on next send' });
 });
 
 // ── POST /api/sensor ──────────────────────────

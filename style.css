@@ -414,6 +414,19 @@ main{
 .config-save-status.saved{color:var(--green)}
 @keyframes savePulse{0%,100%{opacity:1}50%{opacity:.4}}
 
+.reset-wifi-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  margin-left:auto;
+  padding:6px 14px;border-radius:100px;
+  background:transparent;border:1px solid rgba(255,71,87,.3);
+  color:var(--red);font-size:.72rem;font-weight:600;
+  cursor:pointer;transition:var(--tr);
+}
+.reset-wifi-btn:hover{
+  background:rgba(255,71,87,.1);border-color:var(--red);
+}
+.reset-wifi-btn:active{transform:scale(.95)}
+
 /* ── Watering Logic Flow ── */
 .water-logic{
   display:flex;align-items:center;gap:0;
