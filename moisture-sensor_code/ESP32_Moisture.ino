@@ -62,7 +62,7 @@ void connectWiFi() {
 }
 
 // ─────────────────────────────────────────────
-bool sendMoistureData(int rawValue) {
+bool sendMoistureData(int moisturePercent) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("⚠️  WiFi not connected, skipping...");
     return false;
@@ -78,9 +78,9 @@ bool sendMoistureData(int rawValue) {
     http.setInsecure();
   }
 
-  // Build JSON payload
-  String json = "{\"device\":\"" + String(DEVICE_ID) + "\","
-                "\"moisture\":" + String(rawValue) + "}";
+    // Build JSON payload — send moisture PERCENTAGE, not raw ADC
+    String json = "{\"device\":\"" + String(DEVICE_ID) + "\","
+                  "\"moisture\":" + String(moistPct) + "}";
 
   Serial.print("📤 Sending → ");
   Serial.println(json);

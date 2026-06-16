@@ -9,6 +9,12 @@ let chart       = null;
 let evtSrc      = null;
 let rTimer      = null;
 
+// ── XSS Protection ────────────────────────────
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 // ── Droplets ──────────────────────────────────
 (function() {
   const wrap = document.getElementById('bg-particles');
@@ -220,12 +226,15 @@ function updateTable() {
   const rows = history.slice(0, 15).map((r, i) => {
     const t = new Date(r.timestamp).toLocaleTimeString('en-GB');
     const vc = r.valve === 'OPEN' ? '#2ed573' : '#ff4757';
+    const moistureDisplay = r.moisture !== null ? r.moisture + '%' : '--';
+    const levelColor = r.level ? r.level.color : '#4a6070';
+    const levelLabel = r.level ? r.level.label : '--';
     return `<tr class="${i===0?'new-row':''}">
-      <td class="mono">${totalCount-i}</td><td>${r.device}</td>
-      <td style="font-weight:800;color:${r.level.color}">${r.moisture}%</td>
+      <td class="mono">${totalCount-i}</td><td>${escapeHtml(r.device)}</td>
+      <td style="font-weight:800;color:${levelColor}">${moistureDisplay}</td>
       <td class="mono">${r.raw??'--'}</td>
       <td><span class="pill" style="color:${vc};background:${vc}15;border-color:${vc}44">${r.valve==='OPEN'?'💦':'🚫'} ${r.valve}</span></td>
-      <td><span class="pill" style="color:${r.level.color};background:${r.level.color}15;border-color:${r.level.color}44">${r.level.icon} ${r.level.label}</span></td>
+      <td><span class="pill" style="color:${levelColor};background:${levelColor}15;border-color:${levelColor}44">${levelLabel}</span></td>
       <td class="mono">${t}</td></tr>`;
   }).join('');
   body.innerHTML = rows;
@@ -317,10 +326,10 @@ function processReading(reading) {
   history.unshift(reading);
   if (history.length > 200) history.pop();
 
-  updateRing(parseFloat(reading.moisture), reading.level.color);
+  if (reading.level) updateRing(parseFloat(reading.moisture), reading.level.color);
   updateValve(reading.valve);
   updateRaw(reading.raw);
-  setSoilLevel(reading.level);
+  if (reading.level) setSoilLevel(reading.level);
   updateMini(reading);
   updateTable();
   updateChart();
@@ -345,10 +354,10 @@ function connectSSE() {
           history = msg.data.history;
           totalCount = history.length;
           const r = history[0];
-          updateRing(parseFloat(r.moisture), r.level.color);
+          if (r.level) updateRing(parseFloat(r.moisture), r.level.color);
           updateValve(r.valve);
           updateRaw(r.raw);
-          setSoilLevel(r.level);
+          if (r.level) setSoilLevel(r.level);
           updateMini(r);
           updateTable();
           updateChart();

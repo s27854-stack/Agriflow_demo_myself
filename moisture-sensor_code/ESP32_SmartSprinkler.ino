@@ -27,6 +27,10 @@ unsigned long valveStartTime = 0;
 // ==================== Reset Button ====================
 unsigned long resetPressedSince = 0;
 
+// ==================== Send Timer ====================
+unsigned long lastSendTime = 0;
+const unsigned long SEND_INTERVAL = 30000; // 30 seconds
+
 // ==================== WiFi Connect ====================
 void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
@@ -167,14 +171,15 @@ void loop() {
   }
   Serial.println();
 
-  // ---------- Send to Dashboard ----------
-  if (WiFi.status() == WL_CONNECTED) {
+  // ---------- Send to Dashboard (every 30 seconds) ----------
+  if (millis() - lastSendTime >= SEND_INTERVAL && WiFi.status() == WL_CONNECTED) {
+    lastSendTime = millis();
+
     HTTPClient http;
     http.begin(serverUrl);
     http.addHeader("Content-Type", "application/json");
     http.setTimeout(10000);
 
-    // Skip SSL certificate verification for HTTPS (Railway, cloud servers)
     if (serverUrl.startsWith("https")) {
       http.setInsecure();
     }
@@ -201,5 +206,5 @@ void loop() {
     http.end();
   }
 
-  delay(30000); // Send every 30 seconds
+  delay(100); // Small delay to prevent CPU spinning
 }

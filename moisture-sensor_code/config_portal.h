@@ -145,9 +145,25 @@ static String cpBuildPage() {
 }
 
 // ── Validation ───────────────────────────────
+// Accept both IP addresses (192.168.1.53) and domain names (server.onrender.com)
 static bool cpValidIp(const String &s) {
+  if (s.length() == 0 || s.length() > 255) return false;
+
+  // Check if it's a domain (contains letters)
+  bool hasLetters = false;
+  bool hasDigits = false;
+  for (unsigned int i = 0; i < s.length(); i++) {
+    char c = s[i];
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-') hasLetters = true;
+    if (c >= '0' && c <= '9') hasDigits = true;
+  }
+
+  // If contains letters → it's a domain → accept it
+  if (hasLetters) return true;
+
+  // Otherwise validate as IP address
   int parts = 0, dots = 0, val = 0; bool any = false;
-  for (size_t i = 0; i < s.length(); i++) {
+  for (unsigned int i = 0; i < s.length(); i++) {
     char c = s[i];
     if (c == '.') {
       if (!any) return false;

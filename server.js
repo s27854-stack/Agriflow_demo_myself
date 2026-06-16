@@ -8,7 +8,20 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname));
+
+// Serve only dashboard files (not .ino, .h, server.js etc.)
+app.use(express.static(__dirname, {
+  index: 'index.html',
+  extensions: ['html'],
+  setHeaders: (res, path) => {
+    // Only allow specific file types
+    const allowed = ['.html', '.css', '.js', '.json', '.png', '.jpg', '.svg', '.ico'];
+    const ext = require('path').extname(path);
+    if (!allowed.includes(ext)) {
+      res.status(403).end();
+    }
+  }
+}));
 
 // ── TiDB Connection ───────────────────────────
 const dbConfig = {

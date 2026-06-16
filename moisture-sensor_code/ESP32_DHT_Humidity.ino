@@ -1,6 +1,6 @@
 /*
  * =====================================================
- *  Smart Spinker — ESP32 DHT Humidity Sensor
+ *  Smart Sprinkler — ESP32 DHT Humidity Sensor
  *  Sends Humidity + Temperature → Node.js Dashboard
  * =====================================================
  *
@@ -128,7 +128,7 @@ void setup() {
   delay(500);
 
   Serial.println("=====================================");
-  Serial.println("  Smart Spinker — Humidity Monitor  ");
+  Serial.println("  Smart Sprinkler — Humidity Monitor  ");
   Serial.println("=====================================");
 
   dht.begin();
