@@ -5,7 +5,6 @@
 
 // ==================== Config (loaded from NVS) ===================
 DeviceConfig cfg;
-String serverUrl;
 
 // ==================== Sensor ==================
 const int moisturePin = 34;
@@ -110,14 +109,11 @@ void setup() {
     if (!loadConfig(cfg)) ESP.restart();
   }
 
-  serverUrl = buildServerUrl(cfg);
-
   connectWiFi();
 
   Serial.println("Agriflow Started");
-  Serial.println("Config adjustable from dashboard!");
   Serial.print("Server: ");
-  Serial.println(serverUrl);
+  Serial.println(cfg.serverUrl);
 }
 
 // ==================== Main Loop ====================
@@ -176,11 +172,11 @@ void loop() {
     lastSendTime = millis();
 
     HTTPClient http;
-    http.begin(serverUrl);
+    http.begin(cfg.serverUrl);
     http.addHeader("Content-Type", "application/json");
     http.setTimeout(10000);
 
-    if (serverUrl.startsWith("https")) {
+    if (cfg.serverUrl.startsWith("https")) {
       http.setInsecure();
     }
 

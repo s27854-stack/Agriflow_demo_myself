@@ -37,13 +37,13 @@
 #define CP_RESET_PIN      0             // GPIO0 = BOOT button on most boards
 #define CP_RESET_HOLD_MS  3000          // hold 3s to wipe config
 #define CP_AP_IP_3        4             // → AP IP 192.168.4.1
+#define CP_SERVER_URL     "https://agriflow-mvt7.onrender.com/api/sensor"  // ← Embedded server URL
 
 // ── Stored config ────────────────────────────
 struct DeviceConfig {
   String wifiSsid;
   String wifiPass;
-  String serverIp;
-  uint16_t serverPort;
+  String serverUrl;  // Full URL (e.g., "https://agriflow-mvt7.onrender.com/api/sensor")
 };
 
 // Globals used by the portal loop (declared here, defined below).
@@ -130,12 +130,9 @@ static String cpBuildPage() {
     + "<label>&#128273; WiFi Password</label>"
     + "<input name='pass' type='password' placeholder='your WiFi password'>"
 
-    + "<label>&#128421;&#65039; Dashboard Server IP</label>"
-    + "<div class='row'>"
-    + "  <input class='ip' name='ip' placeholder='your-server.up.railway.app' required>"
-    + "  <input class='port' name='port' type='number' value='3000' min='1' max='65535'>"
-    + "</div>"
-    + "<div class='hint'>For Railway/cloud: enter domain (port auto-detected). For local: enter IP + port.</div>"
+    + "<!-- Server URL is pre-configured — no need to enter -->"
+    + "<input type='hidden' name='ip' value='" CP_SERVER_URL "'>"
+    + "<input type='hidden' name='port' value='443'>"
 
     + "<button type='submit'>&#128190; Save &amp; Connect</button>"
     + "</form></body></html>";
@@ -187,17 +184,12 @@ static void cpHandleRoot() {
 }
 
 static void cpHandleSave() {
-  // WebServer.arg() works for both GET params and POST form data
-  // on ESP32 core 2.x and 3.x when content-type is form-urlencoded.
-  String ssid  = cpServer.arg("ssid");
-  String pass  = cpServer.arg("pass");
-  String ip    = cpServer.arg("ip");
-  String ports = cpServer.arg("port");
+  String ssid = cpServer.arg("ssid");
+  String pass = cpServer.arg("pass");
 
   // Fallback: some cores need arg("plain") for POST body parsing
   if (ssid.length() == 0 && cpServer.hasArg("plain")) {
     String body = cpServer.arg("plain");
-    // Minimal form-urlencoded parser for our 4 fields
     auto extract = [&](const String &key) -> String {
       String search = key + "=";
       int idx = body.indexOf(search);
@@ -205,21 +197,13 @@ static void cpHandleSave() {
       int start = idx + search.length();
       int end = body.indexOf('&', start);
       if (end < 0) end = body.length();
-      // Simple URL decode for common chars
       String val = body.substring(start, end);
       val.replace("+", " ");
       val.replace("%20", " ");
-      val.replace("%26", "&");
-      val.replace("%27", "'");
-      val.replace("%22", "\"");
-      val.replace("%3C", "<");
-      val.replace("%3E", ">");
       return val;
     };
     ssid = extract("ssid");
     pass = extract("pass");
-    ip   = extract("ip");
-    ports = extract("port");
   }
 
   if (ssid.length() == 0) {
@@ -231,24 +215,12 @@ static void cpHandleSave() {
       "</div></body></html>");
     return;
   }
-  if (!cpValidIp(ip)) {
-    cpServer.send(400, "text/html",
-      "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;background:#0b0f1e;color:#ddeeff;display:flex;align-items:center;justify-content:center;min-height:100vh'><div style='text-align:center;padding:40px'>"
-      "<h2 style='color:#ff4757'>&#10060; Invalid Server IP</h2>"
-      "<p style='color:#4a6070;margin-top:12px'>Enter a valid IP like 192.168.1.53</p>"
-      "<p style='margin-top:20px'><a href='/' style='color:#00d2ff'>&#8592; Back to Setup</a></p>"
-      "</div></body></html>");
-    return;
-  }
-  long port = ports.toInt();
-  if (port < 1 || port > 65535) port = 3000;
 
-  // Persist to NVS.
+  // Persist to NVS — WiFi credentials only (server URL is pre-configured)
   cpPrefs.begin(CP_NS, false);
-  cpPrefs.putString("ssid",  ssid);
-  cpPrefs.putString("pass",  pass);
-  cpPrefs.putString("ip",    ip);
-  cpPrefs.putUShort("port", (uint16_t)port);
+  cpPrefs.putString("ssid", ssid);
+  cpPrefs.putString("pass", pass);
+  cpPrefs.putString("url", CP_SERVER_URL);
   cpPrefs.putBool("set", true);
   cpPrefs.end();
 
@@ -297,10 +269,9 @@ static bool loadConfig(DeviceConfig &cfg) {
   cpPrefs.begin(CP_NS, true);
   bool set = cpPrefs.getBool("set", false);
   if (set) {
-    cfg.wifiSsid   = cpPrefs.getString("ssid", "");
-    cfg.wifiPass   = cpPrefs.getString("pass", "");
-    cfg.serverIp   = cpPrefs.getString("ip",   "");
-    cfg.serverPort = cpPrefs.getUShort("port", 3000);
+    cfg.wifiSsid  = cpPrefs.getString("ssid", "");
+    cfg.wifiPass  = cpPrefs.getString("pass", "");
+    cfg.serverUrl = cpPrefs.getString("url",  CP_SERVER_URL);
   }
   cpPrefs.end();
   return set && cfg.wifiSsid.length() > 0;
@@ -391,23 +362,8 @@ static void startConfigPortal() {
 // Build the sensor endpoint URL from saved config.
 // Auto-detect: if serverIp contains letters (domain) → HTTPS, else HTTP.
 static String buildServerUrl(const DeviceConfig &cfg) {
-  // Check if serverIp is a domain (contains letters) or IP (numbers only)
-  bool isDomain = false;
-  for (unsigned int i = 0; i < cfg.serverIp.length(); i++) {
-    char c = cfg.serverIp[i];
-    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-') {
-      isDomain = true;
-      break;
-    }
-  }
-
-  if (isDomain) {
-    // Domain (like Railway) → HTTPS, port 443
-    return "https://" + cfg.serverIp + "/api/sensor";
-  } else {
-    // IP address → HTTP with port
-    return "http://" + cfg.serverIp + ":" + String(cfg.serverPort) + "/api/sensor";
-  }
+  // Server URL is pre-configured and stored in NVS
+  return cfg.serverUrl;
 }
 
 // Poll the reset button. Returns true if held long enough → caller wipes

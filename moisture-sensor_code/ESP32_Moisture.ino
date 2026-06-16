@@ -20,7 +20,6 @@ const char* DEVICE_ID = "ESP32_01";
 
 // ── Config (loaded from NVS at boot) ─────────
 DeviceConfig cfg;
-String serverUrl;
 
 // ── Sensor Pin ───────────────────────────────
 const int MOISTURE_PIN = 34;
@@ -69,12 +68,12 @@ bool sendMoistureData(int moisturePercent) {
   }
 
   HTTPClient http;
-  http.begin(serverUrl);
+  http.begin(cfg.serverUrl);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
 
-  // Skip SSL certificate verification for HTTPS (Railway, cloud servers)
-  if (serverUrl.startsWith("https")) {
+  // Skip SSL certificate verification for HTTPS (cloud servers)
+  if (cfg.serverUrl.startsWith("https")) {
     http.setInsecure();
   }
 
@@ -115,9 +114,8 @@ void setup() {
     startConfigPortal();
     if (!loadConfig(cfg)) ESP.restart();
   }
-  serverUrl = buildServerUrl(cfg);
   Serial.print("Dashboard API: ");
-  Serial.println(serverUrl);
+  Serial.println(cfg.serverUrl);
 
   connectWiFi();
 }

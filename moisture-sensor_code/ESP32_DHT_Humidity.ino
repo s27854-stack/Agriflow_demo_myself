@@ -34,7 +34,6 @@
 
 // ── Config (loaded from NVS at boot) ──────────────────
 DeviceConfig cfg;
-String serverUrl;
 
 const char* DEVICE_ID   = "ESP32_DHT";
 
@@ -91,12 +90,12 @@ bool sendData(float humidity, float temperature, float heatIndex) {
   }
 
   HTTPClient http;
-  http.begin(serverUrl);
+  http.begin(cfg.serverUrl);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(10000);
 
-  // Skip SSL certificate verification for HTTPS (Railway, cloud servers)
-  if (serverUrl.startsWith("https")) {
+  // Skip SSL certificate verification for HTTPS (cloud servers)
+  if (cfg.serverUrl.startsWith("https")) {
     http.setInsecure();
   }
 
@@ -140,7 +139,6 @@ void setup() {
     startConfigPortal();
     if (!loadConfig(cfg)) ESP.restart();
   }
-  serverUrl = buildServerUrl(cfg);
 
   connectWiFi();
 }
