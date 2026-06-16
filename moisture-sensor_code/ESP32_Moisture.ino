@@ -26,7 +26,7 @@ String serverUrl;
 const int MOISTURE_PIN = 34;
 
 // ── Send Interval ────────────────────────────
-const unsigned long SEND_INTERVAL = 5000; // ms
+const unsigned long SEND_INTERVAL = 30000; // ms — send every 30 seconds
 unsigned long lastSendTime = 0;
 
 // ── Reset Button ─────────────────────────────

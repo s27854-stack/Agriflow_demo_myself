@@ -45,7 +45,7 @@ const char* DEVICE_ID   = "ESP32_DHT";
 DHT dht(DHT_PIN, DHT_TYPE);
 
 // ── Interval ──────────────────────────────────────────
-const unsigned long INTERVAL = 5000; // Send every 5 seconds
+const unsigned long INTERVAL = 30000; // Send every 30 seconds
 unsigned long lastSend = 0;
 
 // ── Reset Button ───────────────────────────────────────

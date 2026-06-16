@@ -201,5 +201,5 @@ void loop() {
     http.end();
   }
 
-  delay(5000);
+  delay(30000); // Send every 30 seconds
 }
