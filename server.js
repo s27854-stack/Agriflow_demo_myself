@@ -98,13 +98,16 @@ async function saveConfig() {
 
 // ── Keep-Alive Ping ───────────────────────────
 const KEEP_ALIVE_INTERVAL = 10 * 60 * 1000;
-const KEEP_ALIVE_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+const KEEP_ALIVE_URL = process.env.RENDER_EXTERNAL_URL || `https://agriflow-mvt7.onrender.com`;
 
 setInterval(() => {
   fetch(KEEP_ALIVE_URL)
     .then(() => console.log(`[KEEP-ALIVE] Pinged at ${new Date().toISOString()}`))
     .catch(() => {});
 }, KEEP_ALIVE_INTERVAL);
+
+// Also ping on startup
+fetch(KEEP_ALIVE_URL).catch(() => {});
 
 // ── SSE Clients ───────────────────────────────
 let clients = [];
