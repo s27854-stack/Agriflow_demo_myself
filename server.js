@@ -1,67 +1,109 @@
 const express = require('express');
 const cors    = require('cors');
-const path    = require('path');
+const mysql   = require('mysql2/promise');
 const os      = require('os');
-const fs      = require('fs');
 
-const app     = express();
-const PORT    = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, 'data.json');
+const app  = express();
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// ── Data Store ────────────────────────────────
-const MAX_HISTORY = 200;
-let store = {
-  latest:  null,
-  history: [],
-  devices: {}
+// ── TiDB Connection ───────────────────────────
+const dbConfig = {
+  host:     process.env.TIDB_HOST     || 'localhost',
+  port:     process.env.TIDB_PORT     || 4000,
+  user:     process.env.TIDB_USER     || 'root',
+  password: process.env.TIDB_PASSWORD || '',
+  database: process.env.TIDB_DATABASE || 'smart_sprinkler',
+  ssl:      { rejectUnauthorized: true }
 };
 
-let config = {
-  openThreshold:   40,
-  wateringMinutes: 3
-};
+let db = null;
 
-// ── Persistence ───────────────────────────────
-function loadState() {
+async function connectDB() {
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf8');
-      const saved = JSON.parse(raw);
-      if (saved.store)  store  = { ...store,  ...saved.store  };
-      if (saved.config) config = { ...config, ...saved.config };
-      console.log(`[PERSIST] Loaded ${store.history.length} readings`);
-    }
+    db = await mysql.createConnection(dbConfig);
+    console.log('[DB] Connected to TiDB');
+
+    // Create tables if not exist
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS readings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        device VARCHAR(50),
+        raw INT,
+        moisture DECIMAL(5,1),
+        valve VARCHAR(10),
+        level_label VARCHAR(20),
+        level_color VARCHAR(10),
+        humidity DECIMAL(5,1),
+        temperature DECIMAL(5,1),
+        heat_index DECIMAL(5,1),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS config (
+        id INT PRIMARY KEY DEFAULT 1,
+        open_threshold INT DEFAULT 40,
+        watering_minutes INT DEFAULT 3,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Insert default config if not exist
+    await db.execute(`
+      INSERT IGNORE INTO config (id, open_threshold, watering_minutes) VALUES (1, 40, 3)
+    `);
+
+    console.log('[DB] Tables ready');
   } catch (err) {
-    console.warn('[PERSIST] Could not load state:', err.message);
+    console.error('[DB] Connection failed:', err.message);
+    console.log('[DB] Retrying in 5 seconds...');
+    setTimeout(connectDB, 5000);
   }
 }
 
-let saveTimer = null;
-function saveState() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try {
-      fs.writeFileSync(DATA_FILE, JSON.stringify({ store, config }, null, 2));
-    } catch (err) {
-      console.warn('[PERSIST] Save failed:', err.message);
+connectDB();
+
+// ── Config (from TiDB) ────────────────────────
+let config = { openThreshold: 40, wateringMinutes: 3 };
+
+async function loadConfig() {
+  if (!db) return;
+  try {
+    const [rows] = await db.execute('SELECT * FROM config WHERE id = 1');
+    if (rows.length) {
+      config.openThreshold   = rows[0].open_threshold;
+      config.wateringMinutes = rows[0].watering_minutes;
     }
-  }, 1000);
+  } catch (err) {
+    console.error('[DB] Load config failed:', err.message);
+  }
 }
 
-loadState();
+async function saveConfig() {
+  if (!db) return;
+  try {
+    await db.execute(
+      'UPDATE config SET open_threshold = ?, watering_minutes = ? WHERE id = 1',
+      [config.openThreshold, config.wateringMinutes]
+    );
+  } catch (err) {
+    console.error('[DB] Save config failed:', err.message);
+  }
+}
 
-// ── Keep-Alive Ping (prevent Render sleep) ───
-const KEEP_ALIVE_INTERVAL = 10 * 60 * 1000; // 10 minutes
+// ── Keep-Alive Ping ───────────────────────────
+const KEEP_ALIVE_INTERVAL = 10 * 60 * 1000;
 const KEEP_ALIVE_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
 
 setInterval(() => {
   fetch(KEEP_ALIVE_URL)
     .then(() => console.log(`[KEEP-ALIVE] Pinged at ${new Date().toISOString()}`))
-    .catch(() => {}); // ignore errors
+    .catch(() => {});
 }, KEEP_ALIVE_INTERVAL);
 
 // ── SSE Clients ───────────────────────────────
@@ -73,11 +115,11 @@ function broadcast(data) {
 
 // ── Soil Moisture Level ───────────────────────
 function soilLevel(moisture) {
-  if (moisture < 20)                         return { label: 'Very Dry',    color: '#ff4757', icon: 'dry' };
-  if (moisture >= 20 && moisture < 40)       return { label: 'Dry',         color: '#ff6b35', icon: 'dry' };
-  if (moisture >= 40 && moisture < 60)       return { label: 'Good',        color: '#2ed573', icon: 'good' };
-  if (moisture >= 60 && moisture < 80)       return { label: 'Moist',       color: '#00d2ff', icon: 'moist' };
-  return                                            { label: 'Saturated',   color: '#7b2ff7', icon: 'saturated' };
+  if (moisture < 20)                         return { label: 'Very Dry',  color: '#ff4757' };
+  if (moisture >= 20 && moisture < 40)       return { label: 'Dry',       color: '#ff6b35' };
+  if (moisture >= 40 && moisture < 60)       return { label: 'Good',      color: '#2ed573' };
+  if (moisture >= 60 && moisture < 80)       return { label: 'Moist',     color: '#00d2ff' };
+  return                                            { label: 'Saturated', color: '#7b2ff7' };
 }
 
 // ── GET /api/config ───────────────────────────
@@ -86,20 +128,20 @@ app.get('/api/config', (req, res) => {
 });
 
 // ── POST /api/config ──────────────────────────
-app.post('/api/config', (req, res) => {
+app.post('/api/config', async (req, res) => {
   const { openThreshold, wateringMinutes } = req.body;
 
   if (openThreshold !== undefined)   config.openThreshold   = Math.max(5, Math.min(95, parseInt(openThreshold)));
   if (wateringMinutes !== undefined) config.wateringMinutes = Math.max(1, Math.min(60, parseInt(wateringMinutes)));
 
   console.log(`[CONFIG] Open <${config.openThreshold}% | Water ${config.wateringMinutes} min`);
-  saveState();
+  await saveConfig();
   broadcast({ type: 'config', data: config });
   res.json({ ok: true, config });
 });
 
 // ── POST /api/sensor ──────────────────────────
-app.post('/api/sensor', (req, res) => {
+app.post('/api/sensor', async (req, res) => {
   const {
     raw, moisture, valve, device, threshold, wateringMinutes: wm,
     humidity, temperature, heatIndex
@@ -109,9 +151,10 @@ app.post('/api/sensor', (req, res) => {
     return res.status(400).json({ error: 'Missing moisture or humidity' });
   }
 
-  const id      = device || 'ESP32';
-  const ts      = new Date().toISOString();
-  const level   = moisture !== undefined ? soilLevel(parseFloat(moisture)) : null;
+  const id    = device || 'ESP32';
+  const ts    = new Date().toISOString();
+  const level = moisture !== undefined ? soilLevel(parseFloat(moisture)) : null;
+
   const reading = {
     device:      id,
     raw:         raw         !== undefined ? parseInt(raw)                  : null,
@@ -125,26 +168,80 @@ app.post('/api/sensor', (req, res) => {
     timestamp:   ts
   };
 
-  store.latest = reading;
-  store.history.unshift(reading);
-  if (store.history.length > MAX_HISTORY) store.history.pop();
-
-  if (!store.devices[id]) store.devices[id] = { count: 0 };
-  store.devices[id].count++;
-  store.devices[id].lastSeen = ts;
-  store.devices[id].latest   = reading;
+  // Save to TiDB
+  if (db) {
+    try {
+      await db.execute(
+        `INSERT INTO readings (device, raw, moisture, valve, level_label, level_color, humidity, temperature, heat_index)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, reading.raw, reading.moisture, reading.valve,
+         level?.label || null, level?.color || null,
+         reading.humidity, reading.temperature, reading.heatIndex]
+      );
+    } catch (err) {
+      console.error('[DB] Save reading failed:', err.message);
+    }
+  }
 
   const mPart = reading.moisture !== null ? `Moisture: ${reading.moisture}% | ` : '';
   const dhtPart = reading.humidity !== null ? `H: ${reading.humidity}% T: ${reading.temperature}°C | ` : '';
   console.log(`[${ts}] ${id} — ${mPart}${dhtPart}Valve: ${valve}${level ? ' | ' + level.label : ''}`);
 
-  saveState();
   broadcast({ type: 'reading', data: reading });
   res.json({ ok: true, reading, config });
 });
 
 // ── GET /api/data ─────────────────────────────
-app.get('/api/data', (req, res) => res.json({ ...store, config }));
+app.get('/api/data', async (req, res) => {
+  let history = [];
+  let devices = {};
+
+  if (db) {
+    try {
+      // Get last 200 readings
+      const [rows] = await db.execute(
+        'SELECT * FROM readings ORDER BY created_at DESC LIMIT 200'
+      );
+
+      history = rows.map(r => ({
+        device:      r.device,
+        raw:         r.raw,
+        moisture:    r.moisture !== null ? String(r.moisture) : null,
+        valve:       r.valve,
+        level:       r.level_label ? { label: r.level_label, color: r.level_color } : null,
+        humidity:    r.humidity !== null ? String(r.humidity) : null,
+        temperature: r.temperature !== null ? String(r.temperature) : null,
+        heatIndex:   r.heat_index !== null ? String(r.heat_index) : null,
+        timestamp:   r.created_at
+      }));
+
+      // Build devices object
+      for (const r of history) {
+        if (!devices[r.device]) {
+          devices[r.device] = { count: 0, lastSeen: r.timestamp, latest: r };
+        }
+        devices[r.device].count++;
+      }
+
+      // Get total count
+      const [countResult] = await db.execute('SELECT COUNT(*) as total FROM readings');
+      const totalCount = countResult[0].total;
+
+      // Update device counts with total
+      for (const d of Object.keys(devices)) {
+        const [deviceCount] = await db.execute(
+          'SELECT COUNT(*) as count FROM readings WHERE device = ?', [d]
+        );
+        devices[d].count = deviceCount[0].count;
+      }
+
+    } catch (err) {
+      console.error('[DB] Load data failed:', err.message);
+    }
+  }
+
+  res.json({ latest: history[0] || null, history, devices, config });
+});
 
 // ── SSE stream ────────────────────────────────
 app.get('/api/events', (req, res) => {
@@ -154,9 +251,31 @@ app.get('/api/events', (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.flushHeaders();
 
-  res.write(`data: ${JSON.stringify({ type: 'init', data: { ...store, config } })}\n\n`);
-  clients.push(res);
+  // Send initial data
+  (async () => {
+    let initData = { latest: null, history: [], devices: {}, config };
+    if (db) {
+      try {
+        const [rows] = await db.execute(
+          'SELECT * FROM readings ORDER BY created_at DESC LIMIT 200'
+        );
+        initData.history = rows.map(r => ({
+          device: r.device, raw: r.raw,
+          moisture: r.moisture !== null ? String(r.moisture) : null,
+          valve: r.valve,
+          level: r.level_label ? { label: r.level_label, color: r.level_color } : null,
+          humidity: r.humidity !== null ? String(r.humidity) : null,
+          temperature: r.temperature !== null ? String(r.temperature) : null,
+          heatIndex: r.heat_index !== null ? String(r.heat_index) : null,
+          timestamp: r.created_at
+        }));
+        initData.latest = initData.history[0] || null;
+      } catch {}
+    }
+    res.write(`data: ${JSON.stringify({ type: 'init', data: initData })}\n\n`);
+  })();
 
+  clients.push(res);
   const hb = setInterval(() => { try { res.write(': ping\n\n'); } catch {} }, 20000);
   req.on('close', () => { clearInterval(hb); clients = clients.filter(c => c !== res); });
 });
@@ -169,7 +288,8 @@ function localIP() {
   return 'localhost';
 }
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
+  await loadConfig();
   const ip = localIP();
   console.log('');
   console.log('╔══════════════════════════════════════════════════╗');
@@ -177,8 +297,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('╠══════════════════════════════════════════════════╣');
   console.log(`║  Dashboard : http://localhost:${PORT}              ║`);
   console.log(`║  Network   : http://${ip}:${PORT}             ║`);
+  console.log(`║  Database  : TiDB (MySQL-compatible)             ║`);
   console.log(`║  ESP32 URL : POST /api/sensor                   ║`);
-  console.log(`║  Keep-Alive: Ping every 10 min                  ║`);
   console.log('╚══════════════════════════════════════════════════╝');
   console.log('');
   console.log(`Config: Open <${config.openThreshold}% | Water ${config.wateringMinutes} min`);
