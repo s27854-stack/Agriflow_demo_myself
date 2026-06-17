@@ -396,16 +396,23 @@ document.querySelectorAll('.rbtn').forEach(btn => {
 
 // ── Config UI ───────────────────────────────────
 let saveTimer = null;
+
+function clampConfig(cfg) {
+  return {
+    openThreshold: Math.min(95, Math.max(5, Math.round(cfg.openThreshold || 40))),
+    wateringMinutes: Math.min(30, Math.max(1, Math.round(cfg.wateringMinutes || 3)))
+  };
+}
+
 function loadConfig() {
   fetch('/api/config').then(r => r.json()).then(cfg => {
-    const threshold = Math.min(95, Math.max(5, cfg.openThreshold));
-    const duration = Math.min(30, Math.max(1, cfg.wateringMinutes));
-    document.getElementById('cfg-threshold').value = threshold;
-    document.getElementById('cfg-threshold-val').textContent = threshold;
-    document.getElementById('cfg-duration').value = duration;
-    document.getElementById('cfg-duration-val').textContent = duration;
-    updatePresetActive('threshold-presets', threshold);
-    updatePresetActive('duration-presets', duration);
+    const c = clampConfig(cfg);
+    document.getElementById('cfg-threshold').value = c.openThreshold;
+    document.getElementById('cfg-threshold-val').textContent = c.openThreshold;
+    document.getElementById('cfg-duration').value = c.wateringMinutes;
+    document.getElementById('cfg-duration-val').textContent = c.wateringMinutes;
+    updatePresetActive('threshold-presets', c.openThreshold);
+    updatePresetActive('duration-presets', c.wateringMinutes);
   }).catch(() => {});
 }
 
@@ -498,14 +505,13 @@ document.getElementById('reset-wifi-btn').addEventListener('click', () => {
 
 // Handle SSE config updates from other clients
 function handleConfigUpdate(cfg) {
-  const threshold = Math.min(95, Math.max(5, cfg.openThreshold));
-  const duration = Math.min(30, Math.max(1, cfg.wateringMinutes));
-  document.getElementById('cfg-threshold').value = threshold;
-  document.getElementById('cfg-threshold-val').textContent = threshold;
-  document.getElementById('cfg-duration').value = duration;
-  document.getElementById('cfg-duration-val').textContent = duration;
-  updatePresetActive('threshold-presets', threshold);
-  updatePresetActive('duration-presets', duration);
+  const c = clampConfig(cfg);
+  document.getElementById('cfg-threshold').value = c.openThreshold;
+  document.getElementById('cfg-threshold-val').textContent = c.openThreshold;
+  document.getElementById('cfg-duration').value = c.wateringMinutes;
+  document.getElementById('cfg-duration-val').textContent = c.wateringMinutes;
+  updatePresetActive('threshold-presets', c.openThreshold);
+  updatePresetActive('duration-presets', c.wateringMinutes);
 }
 
 // ── Guide ─────────────────────────────────────
