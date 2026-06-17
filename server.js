@@ -22,15 +22,10 @@ app.use(express.static(__dirname, {
   }
 }));
 
-// ── PostgreSQL Connection (Supabase) ──────────
+// ── PostgreSQL Connection (Supabase Pooler) ───
 const pool = new Pool({
-  host:     process.env.DB_HOST,
-  port:     process.env.DB_PORT     || 5432,
-  user:     process.env.DB_USER     || 'postgres',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME     || 'postgres',
-  ssl:      { rejectUnauthorized: false },
-  family:   4  // Force IPv4
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
 let dbReady = false;
