@@ -152,7 +152,7 @@ app.post('/api/config', async (req, res) => {
   const { openThreshold, wateringMinutes } = req.body;
 
   if (openThreshold !== undefined)   config.openThreshold   = Math.max(5, Math.min(95, parseInt(openThreshold)));
-  if (wateringMinutes !== undefined) config.wateringMinutes = Math.max(1, Math.min(60, parseInt(wateringMinutes)));
+  if (wateringMinutes !== undefined) config.wateringMinutes = Math.max(1, Math.min(30, parseInt(wateringMinutes)));
 
   console.log(`[CONFIG] Open <${config.openThreshold}% | Water ${config.wateringMinutes} min`);
   await saveConfig();

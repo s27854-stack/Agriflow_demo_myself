@@ -398,10 +398,14 @@ document.querySelectorAll('.rbtn').forEach(btn => {
 let saveTimer = null;
 function loadConfig() {
   fetch('/api/config').then(r => r.json()).then(cfg => {
-    document.getElementById('cfg-threshold').value = cfg.openThreshold;
-    document.getElementById('cfg-threshold-val').textContent = cfg.openThreshold;
-    document.getElementById('cfg-duration').value = cfg.wateringMinutes;
-    document.getElementById('cfg-duration-val').textContent = cfg.wateringMinutes;
+    const threshold = Math.min(95, Math.max(5, cfg.openThreshold));
+    const duration = Math.min(30, Math.max(1, cfg.wateringMinutes));
+    document.getElementById('cfg-threshold').value = threshold;
+    document.getElementById('cfg-threshold-val').textContent = threshold;
+    document.getElementById('cfg-duration').value = duration;
+    document.getElementById('cfg-duration-val').textContent = duration;
+    updatePresetActive('threshold-presets', threshold);
+    updatePresetActive('duration-presets', duration);
   }).catch(() => {});
 }
 
@@ -494,10 +498,14 @@ document.getElementById('reset-wifi-btn').addEventListener('click', () => {
 
 // Handle SSE config updates from other clients
 function handleConfigUpdate(cfg) {
-  document.getElementById('cfg-threshold').value = cfg.openThreshold;
-  document.getElementById('cfg-threshold-val').textContent = cfg.openThreshold;
-  document.getElementById('cfg-duration').value = cfg.wateringMinutes;
-  document.getElementById('cfg-duration-val').textContent = cfg.wateringMinutes;
+  const threshold = Math.min(95, Math.max(5, cfg.openThreshold));
+  const duration = Math.min(30, Math.max(1, cfg.wateringMinutes));
+  document.getElementById('cfg-threshold').value = threshold;
+  document.getElementById('cfg-threshold-val').textContent = threshold;
+  document.getElementById('cfg-duration').value = duration;
+  document.getElementById('cfg-duration-val').textContent = duration;
+  updatePresetActive('threshold-presets', threshold);
+  updatePresetActive('duration-presets', duration);
 }
 
 // ── Guide ─────────────────────────────────────
