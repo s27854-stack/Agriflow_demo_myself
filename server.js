@@ -29,7 +29,8 @@ const pool = new Pool({
   user:     process.env.DB_USER     || 'postgres',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME     || 'postgres',
-  ssl:      { rejectUnauthorized: false }
+  ssl:      { rejectUnauthorized: false },
+  family:   4  // Force IPv4
 });
 
 let dbReady = false;
