@@ -438,16 +438,42 @@ function saveConfig(data) {
   });
 }
 
+// ── Threshold Slider ─────────────────────────
 document.getElementById('cfg-threshold').addEventListener('input', e => {
-  document.getElementById('cfg-threshold-val').textContent = e.target.value;
+  const val = parseInt(e.target.value);
+  document.getElementById('cfg-threshold-val').textContent = val;
+  updatePresetActive('threshold-presets', val);
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveConfig({ openThreshold: parseInt(e.target.value) }), 500);
+  saveTimer = setTimeout(() => saveConfig({ openThreshold: val }), 500);
 });
 
+// ── Duration Slider ──────────────────────────
 document.getElementById('cfg-duration').addEventListener('input', e => {
-  document.getElementById('cfg-duration-val').textContent = e.target.value;
+  const val = parseInt(e.target.value);
+  document.getElementById('cfg-duration-val').textContent = val;
+  updatePresetActive('duration-presets', val);
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveConfig({ wateringMinutes: parseInt(e.target.value) }), 500);
+  saveTimer = setTimeout(() => saveConfig({ wateringMinutes: val }), 500);
+});
+
+// ── Preset Buttons ───────────────────────────
+function updatePresetActive(containerId, value) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.val) === value);
+  });
+}
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const val = parseInt(btn.dataset.val);
+    const slider = btn.closest('.config-setting').querySelector('.cfg-slider');
+    if (slider) {
+      slider.value = val;
+      slider.dispatchEvent(new Event('input'));
+    }
+  });
 });
 
 // ── Reset WiFi Button ────────────────────────
