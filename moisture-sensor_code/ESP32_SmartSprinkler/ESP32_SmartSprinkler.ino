@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ESP32Servo.h>
 #include "config_portal.h"   // WiFi + server IP via captive portal (NVS-persisted)
@@ -182,13 +183,16 @@ void loop() {
     lastSendTime = millis();
 
     HTTPClient http;
-    http.begin(cfg.serverUrl);
+    if (cfg.serverUrl.startsWith("https")) {
+      WiFiClientSecure secureClient;
+      secureClient.setInsecure();
+      http.begin(secureClient, cfg.serverUrl);
+    } else {
+      WiFiClient client;
+      http.begin(client, cfg.serverUrl);
+    }
     http.addHeader("Content-Type", "application/json");
     http.setTimeout(10000);
-
-    if (cfg.serverUrl.startsWith("https")) {
-      http.setInsecure();
-    }
 
     String json = "{";
     json += "\"device\":\"ESP32_Sprinkler\",";
